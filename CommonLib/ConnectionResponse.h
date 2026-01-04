@@ -1,46 +1,40 @@
-﻿#ifndef COMMONLIB_H
-#define COMMONLIB_H
-
-/*// Link WinSock library
-#pragma comment(lib, "ws2_32.lib")
-
-// Windows Socket includes
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <winsock2.h>*/
-
+#pragma once
 #include <iostream>
 #include <cstring>
-/*
-#include "list.h"
 
-//#define PORT 8080
+//#define PORT 8090
 
-// TK: Client thread responsible for sending connection request
-class ConnectionRequest {
+// TOZ: Server thread responsible for receiving and processing connection request
+class ConnectionResponse {
 private:
     int idStruct;                // Structure identifier
     int idSource;                // Source ID
     int idDest;                  // Destination ID
-    char username[50];           // Client username
+    bool accepted;               // Status of connection request - approved or not
+    char message[50];            // Message about connection request status
+    int idGame;                  // Game ID
     int checksum;                // Checksum for validation
 
 public:
     // Constructor
-    ConnectionRequest();
-    ConnectionRequest(int source, int dest, const char* user);
+    ConnectionResponse();
+    ConnectionResponse(int source, int dest, bool acc, const char* mess, int game);
 
     // Getters
     int getIdStruct() const { return idStruct; }
     int getIdSource() const { return idSource; }
     int getIdDest() const { return idDest; }
-    const char* getUsername() const { return username; }
+    bool getAccepted() const { return accepted; }
+    const char* getMessage() const { return message; }
+    int getIdGame() const { return idGame; }
     int getChecksum() const { return checksum; }
 
     // Setters
     void setIdSource(int source) { idSource = source; }
     void setIdDest(int dest) { idDest = dest; }
-    void setUsername(const char* user);
+    void setMessage(const char* mess);
+    void setAccepted(bool acc) { accepted = acc; }
+    void setIdGame(int game) { idGame = game; }
 
     // Methods
     void calculateChecksum();
@@ -50,5 +44,3 @@ public:
     void serialize(char* buffer) const;
     void deserialize(const char* buffer);
 };
-*/
-#endif // COMMONLIB_H

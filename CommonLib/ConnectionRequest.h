@@ -1,18 +1,6 @@
-﻿#ifndef COMMONLIB_H
-#define COMMONLIB_H
-
-/*// Link WinSock library
-#pragma comment(lib, "ws2_32.lib")
-
-// Windows Socket includes
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <winsock2.h>*/
-
+#pragma once
 #include <iostream>
 #include <cstring>
-/*
-#include "list.h"
 
 //#define PORT 8080
 
@@ -50,5 +38,3 @@ public:
     void serialize(char* buffer) const;
     void deserialize(const char* buffer);
 };
-*/
-#endif // COMMONLIB_H
