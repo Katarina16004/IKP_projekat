@@ -135,7 +135,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="CommonLib.h" />
     <ClInclude Include="framework.h" />
+    <ClInclude Include="list.h" />
     <ClInclude Include="pch.h" />
   </ItemGroup>
   <ItemGroup>
