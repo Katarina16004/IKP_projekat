@@ -6,6 +6,7 @@
 #include <WS2tcpip.h>
 #include <thread>
 #include <mutex>
+#include <chrono>
 #include "../CommonLib/ConnectionRequest.h"
 #include "../CommonLib/ConnectionResponse.h"
 #include "../CommonLib/Player.h"
@@ -36,6 +37,7 @@ mutex idMutex;
 bool serverRunning = true;
 
 void ClientConnectionHandler(SOCKET clientSocket);  // TOZ thread
+void MatchmakingThread();  // TS thread
 
 int main()
 {
@@ -87,6 +89,11 @@ int main()
     cout << "[SERVER] Listening on port " << DEFAULT_PORT << endl;
     cout << "[SERVER] Ready to accept multiple clients..." << endl;
 
+    // Start TS thread
+    thread matchmakingThread(MatchmakingThread);
+    matchmakingThread.detach();
+    cout << "[TS] Matchmaking thread started.\n" << endl;
+
     // Accept connections (TOZ threads will be created here)
     while (serverRunning) {
         SOCKET clientSocket = accept(listenSocket, NULL, NULL);
@@ -97,7 +104,7 @@ int main()
 
         cout << "[SERVER] New client connection received!" << endl;
 
-        // TOZ:  Create thread for each client connection
+        // TOZ create thread for each client connection
         thread clientThread(ClientConnectionHandler, clientSocket);
         clientThread.detach();
     }
@@ -176,5 +183,76 @@ void ClientConnectionHandler(SOCKET clientSocket) {
         cout << "[TOZ] Waiting players: " << waitingPlayers.size() << endl;
     }
 
-    cout << "[TOZ] Client connection handler finished.   Player is waiting.\n" << endl;
+    cout << "[TOZ] Client connection handler finished.  Player is waiting.\n" << endl;
+}
+
+// TS
+void MatchmakingThread() {
+    cout << "[TS] Matchmaking service started." << endl;
+
+    while (serverRunning) {
+        // Check every second for players to match
+        this_thread::sleep_for(chrono::milliseconds(1000));
+
+        lock_guard<mutex> lock(waitingMutex);
+
+        // Check if we have at least 2 players waiting
+        if (waitingPlayers.size() < 2) {
+            continue;
+        }
+
+        // Get first two players
+        Player player1, player2;
+        waitingPlayers.read(1, player1);
+        waitingPlayers.read(2, player2);
+
+        // Remove them from waiting list
+        waitingPlayers.remove(1);
+        waitingPlayers.remove(1);
+
+        int gameId;
+        {
+            lock_guard<mutex> lock(idMutex);
+            gameId = nextGameId++;
+        }
+
+        // Update both players with the correct game ID
+        player1.setIdGame(gameId);
+        player2.setIdGame(gameId);
+
+        cout << "\n[TS-MATCHMAKING] ================================" << endl;
+        cout << "[TS-MATCHMAKING] Game " << gameId << " created!" << endl;
+        cout << "[TS-MATCHMAKING]   Player 1 (X): " << player1.getUsername()
+            << " (Game ID: " << player1.getIdGame() << ")" << endl;
+        cout << "[TS-MATCHMAKING]   Player 2 (O): " << player2.getUsername()
+            << " (Game ID: " << player2.getIdGame() << ")" << endl;
+        cout << "[TS-MATCHMAKING] ================================\n" << endl;
+
+        // Send game start notifications
+        char buffer[DEFAULT_BUFLEN];
+
+        ConnectionResponse msg1(1, player1.getIdStruct(), true,
+            "Game found!  You are Player X.  Game starting...", gameId);
+        memset(buffer, 0, DEFAULT_BUFLEN);
+        msg1.serialize(buffer);
+        send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
+
+        ConnectionResponse msg2(1, player2.getIdStruct(), true,
+            "Game found!  You are Player O. Game starting..  .", gameId);
+        memset(buffer, 0, DEFAULT_BUFLEN);
+        msg2.serialize(buffer);
+        send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
+
+        cout << "[TS] Game " << gameId << " notifications sent to both players." << endl;
+        cout << "[TS] Waiting players remaining: " << waitingPlayers.size() << endl;
+        cout << "[TS] Ready to match more players.. .\n" << endl;
+
+        // TODO: Start game logic 
+        // For now, just close connections
+        Sleep(3000);
+        closesocket(player1.getAcceptedSocket());
+        closesocket(player2.getAcceptedSocket());
+    }
+
+    cout << "[TS] Matchmaking thread ending." << endl;
 }
