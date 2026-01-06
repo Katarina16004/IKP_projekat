@@ -167,7 +167,7 @@ void ClientConnectionHandler(SOCKET clientSocket) {
     cout << "[TOZ]   Tentative Game ID: " << gameId << endl;
 
     ConnectionResponse response(1, request.getIdSource(), true,
-        "Connection accepted!   Waiting for opponent...", gameId);
+        "Connection accepted!  Waiting for opponent...", gameId);
 
     memset(sendBuffer, 0, DEFAULT_BUFLEN);
     response.serialize(sendBuffer);
@@ -232,22 +232,24 @@ void MatchmakingThread() {
         char buffer[DEFAULT_BUFLEN];
 
         ConnectionResponse msg1(1, player1.getIdStruct(), true,
-            "Game found!  You are Player X.  Game starting...", gameId);
+            "Game found!  You are Player X. Game starting...", gameId);
         memset(buffer, 0, DEFAULT_BUFLEN);
         msg1.serialize(buffer);
         send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
 
         ConnectionResponse msg2(1, player2.getIdStruct(), true,
-            "Game found!  You are Player O. Game starting..  .", gameId);
+            "Game found! You are Player O. Game starting.. .", gameId);
         memset(buffer, 0, DEFAULT_BUFLEN);
         msg2.serialize(buffer);
         send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
 
         cout << "[TS] Game " << gameId << " notifications sent to both players." << endl;
         cout << "[TS] Waiting players remaining: " << waitingPlayers.size() << endl;
-        cout << "[TS] Ready to match more players.. .\n" << endl;
+        cout << "[TS] Ready to match more players...\n" << endl;
 
         // TODO: Start game logic 
+        // 
+        // 
         // For now, just close connections
         Sleep(3000);
         closesocket(player1.getAcceptedSocket());

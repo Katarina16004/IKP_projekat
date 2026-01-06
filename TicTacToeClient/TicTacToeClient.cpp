@@ -43,7 +43,7 @@ int main()
     // Create socket
     SOCKET connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (connectSocket == INVALID_SOCKET) {
-        cerr << "Socket creation failed:  " << WSAGetLastError() << endl;
+        cerr << "Socket creation failed: " << WSAGetLastError() << endl;
         WSACleanup();
         return 1;
     }
@@ -54,6 +54,7 @@ int main()
     serverAddr.sin_addr.s_addr = inet_addr(SERVER_IP);
     serverAddr.sin_port = htons(DEFAULT_PORT);
 
+    //cout << "Connecting to server..." << endl;
     iResult = connect(connectSocket, (sockaddr*)&serverAddr, sizeof(serverAddr));
     if (iResult == SOCKET_ERROR) {
         cerr << "Connection failed: " << WSAGetLastError() << endl;
@@ -62,14 +63,14 @@ int main()
         return 1;
     }
 
-    cout << "Connected to server!" << endl;
+    //cout << "Connected to server!\n" << endl;
 
     // Get username
     char username[50];
     cout << "Enter your username: ";
     cin.getline(username, 50);
 
-    // TK:  Create and send connection request
+    // TK: Create and send connection request
     cout << "\n[TK] Sending connection request..." << endl;
     ConnectionRequest request(1, 0, username);
 
@@ -85,6 +86,7 @@ int main()
         return 1;
     }
     cout << "[TK] Connection request sent successfully." << endl;
+
 
     // FIRST RESPONSE
     cout << "\n[TK] Waiting for TOZ response..." << endl;
@@ -119,7 +121,7 @@ int main()
             // Connection rejected, close and exit
             closesocket(connectSocket);
             WSACleanup();
-            cout << "\nPress Enter to exit...  ";
+            cout << "\nPress Enter to exit... ";
             cin.get();
             return 1;
         }
@@ -135,7 +137,7 @@ int main()
 
     // SECOND RESPONSE
     cout << "[TK] Waiting in matchmaking queue..." << endl;
-    cout << "[TK] Waiting for TS to find opponent..  .\n" << endl;
+    cout << "[TK] Waiting for TS to find opponent.. .\n" << endl;
 
     memset(recvBuffer, 0, DEFAULT_BUFLEN);
     iResult = recv(connectSocket, recvBuffer, DEFAULT_BUFLEN, 0);
