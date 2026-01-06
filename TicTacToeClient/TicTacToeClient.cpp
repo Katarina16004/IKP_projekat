@@ -43,7 +43,7 @@ int main()
     // Create socket
     SOCKET connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (connectSocket == INVALID_SOCKET) {
-        cerr << "Socket creation failed: " << WSAGetLastError() << endl;
+        cerr << "Socket creation failed:  " << WSAGetLastError() << endl;
         WSACleanup();
         return 1;
     }
@@ -69,7 +69,7 @@ int main()
     cout << "Enter your username: ";
     cin.getline(username, 50);
 
-    // TK: Create and send connection request
+    // TK:  Create and send connection request
     cout << "\n[TK] Sending connection request..." << endl;
     ConnectionRequest request(1, 0, username);
 
@@ -119,7 +119,7 @@ int main()
             // Connection rejected, close and exit
             closesocket(connectSocket);
             WSACleanup();
-            cout << "\nPress Enter to exit... ";
+            cout << "\nPress Enter to exit...  ";
             cin.get();
             return 1;
         }
@@ -131,6 +131,42 @@ int main()
         closesocket(connectSocket);
         WSACleanup();
         return 1;
+    }
+
+    // SECOND RESPONSE
+    cout << "[TK] Waiting in matchmaking queue..." << endl;
+    cout << "[TK] Waiting for TS to find opponent..  .\n" << endl;
+
+    memset(recvBuffer, 0, DEFAULT_BUFLEN);
+    iResult = recv(connectSocket, recvBuffer, DEFAULT_BUFLEN, 0);
+
+    if (iResult > 0) {
+        ConnectionResponse matchResponse;
+        matchResponse.deserialize(recvBuffer);
+
+        // Validate checksum
+        if (!matchResponse.validateChecksum()) {
+            cerr << "[TK] ERROR: Invalid checksum in matchmaking response!" << endl;
+            closesocket(connectSocket);
+            WSACleanup();
+            return 1;
+        }
+
+        cout << "\n========================================" << endl;
+        cout << "[TK] MATCHMAKING COMPLETE!" << endl;
+        cout << "Message: " << matchResponse.getMessage() << endl;
+        cout << "Final Game ID: " << matchResponse.getIdGame() << endl;
+        cout << "========================================\n" << endl;
+
+        // TODO: Game
+        cout << "[TK] Game is about to start!" << endl;
+
+    }
+    else if (iResult == 0) {
+        cout << "[TK] Server closed the connection." << endl;
+    }
+    else {
+        cerr << "[TK] Failed to receive matchmaking response." << endl;
     }
 
     // Cleanup
