@@ -63,7 +63,10 @@ void backgroundListener() {
                 }
             }
             else if (iResult <= 0) {
+                cout << "\n[CLIENT] Server disconnected! Ending game." << endl;
+                cout << "Press Enter to exit... ";
                 gameEnded = true;
+                closesocket(globalSocket);
                 return;
             }
         }
@@ -135,8 +138,12 @@ int main()
         iResult = send(connectSocket, sendBuffer, DEFAULT_BUFLEN, 0);
         if (iResult == SOCKET_ERROR) {
             cerr << "[TK] Send failed: " << WSAGetLastError() << endl;
+            cerr << "[TK] Server disconnected. Game ending." << endl;
             closesocket(connectSocket);
             WSACleanup();
+            cout << "\nPress Enter to exit... ";
+            cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            cin.get();
             return 1;
         }
         cout << "[TK] Connection request sent successfully." << endl;
@@ -156,6 +163,9 @@ int main()
                 cerr << "[TK] ERROR: Invalid checksum in response!" << endl;
                 closesocket(connectSocket);
                 WSACleanup();
+                cout << "\nPress Enter to exit... ";
+                cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                cin.get();
                 return 1;
             }
 
@@ -184,7 +194,9 @@ int main()
                     // Drugi razlog - zatvori konekciju
                     closesocket(connectSocket);
                     WSACleanup();
+                    cerr << "[TK] Error. Game ending." << endl;
                     cout << "\nPress Enter to exit... ";
+                    cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
                     cin.get();
                     return 1;
                 }
@@ -195,6 +207,9 @@ int main()
             cerr << "[TK] Failed to receive response from server." << endl;
             closesocket(connectSocket);
             WSACleanup();
+            cout << "\nPress Enter to exit... ";
+            cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            cin.get();
             return 1;
         }
     }
@@ -226,6 +241,9 @@ int main()
                 cerr << "[TK] ERROR: Invalid checksum in matchmaking response!" << endl;
                 closesocket(connectSocket);
                 WSACleanup();
+                cout << "\nPress Enter to exit... ";
+                cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                cin.get();
                 return 1;
             }
 
@@ -358,9 +376,13 @@ int main()
 
                     iResult = send(connectSocket, sendBuffer, DEFAULT_BUFLEN, 0);
                     if (iResult == SOCKET_ERROR) {
-                        cerr << "[TK] Send failed: " << WSAGetLastError() << endl;
+                        cerr << "[TK] Send failed: " << WSAGetLastError() << endl;            
+                        cerr << "[TK] Server disconnected. Game ending." << endl;
                         closesocket(connectSocket);
                         WSACleanup();
+                        cout << "\nPress Enter to exit... ";
+                        cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                        cin.get();
                         return 1;
                     }
                     cout << "[TK] Played move sent successfully." << endl;
@@ -386,12 +408,13 @@ int main()
 
         }
         else if (iResult == 0) {
-            cout << "\n[TK] Server closed the connection." << endl;
+            cerr << "[TK] Server disconnected. Game ending." << endl;
             running = false;
         }
         else {
             if (!gameEnded) {
                 cerr << "[TK] Failed to receive response." << endl;
+                cerr << "[TK] Server disconnected. Game ending." << endl;
             }
             running = false;
         }
