@@ -1,7 +1,7 @@
 #include "MessageForMove.h"
 
 MessageForMove::MessageForMove()
-	: idStruct(3), idSource(0), idDest(0), idGame(0), end(true), playing(false), checksum(0)
+	: idStruct(3), idSource(0), idDest(0), idGame(0), end(true), playing(false), checksum(0), move(0)
 {
 	message[0] = '\0';
 	
@@ -13,8 +13,8 @@ MessageForMove::MessageForMove()
 		}
 	}
 }
-MessageForMove::MessageForMove(int source, int dest, int game, bool e, bool pl, const char* mess, const int** b)
-	: idStruct(3), idSource(source), idDest(dest), idGame(game), end(e), playing(pl)
+MessageForMove::MessageForMove(int source, int dest, int game, bool e, bool pl, const char* mess, const int(&b)[3][3], int _move)
+	: idStruct(3), idSource(source), idDest(dest), idGame(game), end(e), playing(pl), move(_move)
 {
     setMessage(mess);
 	setBoard(b);
@@ -27,27 +27,6 @@ void MessageForMove::setMessage(const char* mess) {
     }
     else {
         message[0] = '\0';
-    }
-}
-
-void MessageForMove::setBoard(const int** b) {
-    if (b != nullptr) {
-        for (int i = 0; i < 3; i++)
-        {
-            for (int j = 0; j < 3; j++)
-            {
-                board[i][j] = b[i][j];
-            }
-        }
-    }
-    else {
-        for (int i = 0; i < 3; i++)
-        {
-            for (int j = 0; j < 3; j++)
-            {
-                board[i][j] = '0';
-            }
-        }
     }
 }
 

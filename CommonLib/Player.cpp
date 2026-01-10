@@ -1,13 +1,13 @@
 #include "Player.h"
 
 Player::Player()
-	: idStruct(5), idGame(0), acceptedSocket(NULL)
+	: idStruct(5), idGame(0), acceptedSocket(NULL), idPlayer(0), playerMove(0)
 {
 	username[0] = '\0';
 }
 
-Player::Player(const char* user, SOCKET soc, int game)
-	: idStruct(5), acceptedSocket(soc), idGame(game)
+Player::Player(const char* user, SOCKET soc, int game, int player, int move)
+	: idStruct(5), acceptedSocket(soc), idGame(game), idPlayer(player), playerMove(move)
 {	
 	setUsername(user);
 }
