@@ -337,6 +337,8 @@ void MatchmakingThread() {
 void PlayingThread(Player player1, Player player2) {
     const int TIMEOUT_SECONDS = 20; // timeout po potezu - za testiranje moze i manje da se stavi
 
+    bool bothAlive = true;
+
     char buffer[DEFAULT_BUFLEN];
     int board[3][3] = { 0 };
 
@@ -344,162 +346,196 @@ void PlayingThread(Player player1, Player player2) {
         "Game found!   You are Player X.  You are playing first.. .", board, 1);
     memset(buffer, 0, DEFAULT_BUFLEN);
     msg1.serialize(buffer);
-    send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
+    if (send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0) == SOCKET_ERROR)
+    {
+        cout << "=================================================" << endl;
+        cout << "[TG] Game  " << player1.getIdGame() << " Player 1 disconnected before matchmaking. Removed from players waiting list." << endl;
+        cout << "=================================================\n" << endl;
+
+        bothAlive = false;
+        nextGameId--;
+
+        // Player1 diskonektovan, Player2 se vraća u listu čekanja
+        lock_guard<mutex> lock(waitingMutex);
+        waitingPlayers.add(waitingPlayers.size() + 1, player2);
+        closesocket(player1.getAcceptedSocket());
+        return;
+    }
+    
 
     MessageForMove msg2(SERVER_ID, player2.getIdPlayer(), player2.getIdGame(), false, false,
         "Game found!  You are Player O. You are playing second...", board, 2);
     memset(buffer, 0, DEFAULT_BUFLEN);
     msg2.serialize(buffer);
-    send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
+    if (send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0) == SOCKET_ERROR) 
+    {
+        cout << "=================================================" << endl;
+        cout << "[TG] Game  " << player2.getIdGame() << " Player 2 disconnected before matchmaking. Removed from players waiting list." << endl;
+        cout << "=================================================\n" << endl;
 
-    cout << "[TG] Game " << player1.getIdGame() << " notifications sent to both players." << endl;
+        bothAlive = false;
+        nextGameId--;
 
-    int iResult;
-
-    bool playing = true;
-    while (playing) {
-        // player 1 move
-        memset(buffer, 0, DEFAULT_BUFLEN);
-        if (!recvWithTimeout(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, TIMEOUT_SECONDS)) {
-            cout << "[TG] Player 1 timed out or disconnected.  Ending game." << endl;
-
-            MessageForMove timeoutMsg1(SERVER_ID, player1.getIdPlayer(), player1.getIdGame(),
-                true, false, "Timeout!  You lost the game.", board, 1);
-            MessageForMove timeoutMsg2(SERVER_ID, player2.getIdPlayer(), player2.getIdGame(),
-                true, true, "Opponent timed out!  You win!", board, 2);
-
-            memset(buffer, 0, DEFAULT_BUFLEN);
-            timeoutMsg1.serialize(buffer);
-            send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
-            memset(buffer, 0, DEFAULT_BUFLEN);
-            timeoutMsg2.serialize(buffer);
-            send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
-
-            closesocket(player1.getAcceptedSocket());
-            closesocket(player2.getAcceptedSocket());
-            return;
-        }
-
-        Move playedMove1;
-        playedMove1.deserialize(buffer);
-
-        board[playedMove1.getX()][playedMove1.getY()] = 1;
-        const char* message = "Player 1 played his move. ";
-        bool win1 = false;
-
-        for (int i = 0; i < 3; ++i) {
-            if ((board[i][0] == 1 && board[i][1] == 1 && board[i][2] == 1) ||
-                (board[0][i] == 1 && board[1][i] == 1 && board[2][i] == 1)) win1 = true;
-        }
-        if ((board[0][0] == 1 && board[1][1] == 1 && board[2][2] == 1) ||
-            (board[0][2] == 1 && board[1][1] == 1 && board[2][0] == 1)) win1 = true;
-
-        if (win1)
-        {
-            cout << "=================================================\n" << endl;
-            cout << "[TG] Game " << player1.getIdGame() << "  =>  " << "PLAYER 1 WINS! !!  Game ending!" << endl;
-            cout << "=================================================\n" << endl;
-
-            MessageForMove finalMsg1(SERVER_ID, player1.getIdPlayer(), player1.getIdGame(), win1, true,
-                "YOU WIN! !! Game ending!", board, 1);
-            memset(buffer, 0, DEFAULT_BUFLEN);
-            finalMsg1.serialize(buffer);
-            send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
-
-            MessageForMove finalMsg2(SERVER_ID, player2.getIdPlayer(), player2.getIdGame(), win1, true,
-                "You lost.  Player 1 wins.  Game ending!", board, 2);
-            memset(buffer, 0, DEFAULT_BUFLEN);
-            finalMsg2.serialize(buffer);
-            send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
-
-            closesocket(player1.getAcceptedSocket());
-            closesocket(player2.getAcceptedSocket());
-            return;
-        }
-
-        MessageForMove msg1(SERVER_ID, player1.getIdPlayer(), player1.getIdGame(), win1, false,
-            message, board, 1);
-        memset(buffer, 0, DEFAULT_BUFLEN);
-        msg1.serialize(buffer);
-        send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
-
-        MessageForMove msg2(SERVER_ID, player2.getIdPlayer(), player2.getIdGame(), win1, true,
-            message, board, 2);
-        memset(buffer, 0, DEFAULT_BUFLEN);
-        msg2.serialize(buffer);
-        send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
-
-        // player 2 move
-        memset(buffer, 0, DEFAULT_BUFLEN);
-        if (!recvWithTimeout(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, TIMEOUT_SECONDS)) {
-            cout << "[TG] Player 2 timed out or disconnected. Ending game." << endl;
-
-            MessageForMove timeoutMsg2(SERVER_ID, player2.getIdPlayer(), player2.getIdGame(),
-                true, false, "Timeout! You lost the game.", board, 2);
-            MessageForMove timeoutMsg1(SERVER_ID, player1.getIdPlayer(), player1.getIdGame(),
-                true, true, "Opponent timed out! You win!", board, 1);
-
-            memset(buffer, 0, DEFAULT_BUFLEN);
-            timeoutMsg2.serialize(buffer); send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
-            memset(buffer, 0, DEFAULT_BUFLEN);
-            timeoutMsg1.serialize(buffer); send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
-
-            closesocket(player1.getAcceptedSocket());
-            closesocket(player2.getAcceptedSocket());
-            return;
-        }
-
-        Move playedMove2;
-        playedMove2.deserialize(buffer);
-
-        board[playedMove2.getX()][playedMove2.getY()] = 2;
-        const char* message2 = "Player 2 played his move.";
-        bool win2 = false;
-
-        for (int i = 0; i < 3; ++i) {
-            if ((board[i][0] == 2 && board[i][1] == 2 && board[i][2] == 2) ||
-                (board[0][i] == 2 && board[1][i] == 2 && board[2][i] == 2)) win2 = true;
-        }
-        if ((board[0][0] == 2 && board[1][1] == 2 && board[2][2] == 2) ||
-            (board[0][2] == 2 && board[1][1] == 2 && board[2][0] == 2)) win2 = true;
-
-        if (win2)
-        {
-            cout << "=================================================\n" << endl;
-            cout << "[TG] Game " << player1.getIdGame() << "  =>  " << "PLAYER 2 WINS!!! Game ending!" << endl;
-            cout << "=================================================\n" << endl;
-
-            MessageForMove finalMsg1(SERVER_ID, player1.getIdPlayer(), player1.getIdGame(), win2, true,
-                "You lost. Player 2 wins.  Game ending!", board, 1);
-            memset(buffer, 0, DEFAULT_BUFLEN);
-            finalMsg1.serialize(buffer);
-            send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
-
-            MessageForMove finalMsg2(SERVER_ID, player2.getIdPlayer(), player2.getIdGame(), win2, true,
-                "YOU WIN!!! Game ending!", board, 2);
-            memset(buffer, 0, DEFAULT_BUFLEN);
-            finalMsg2.serialize(buffer);
-            send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
-
-            closesocket(player1.getAcceptedSocket());
-            closesocket(player2.getAcceptedSocket());
-            return;
-        }
-
-        MessageForMove msg12(SERVER_ID, player1.getIdPlayer(), player1.getIdGame(), win2, true,
-            message2, board, 1);
-        memset(buffer, 0, DEFAULT_BUFLEN);
-        msg12.serialize(buffer);
-        send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
-
-        MessageForMove msg22(SERVER_ID, player2.getIdPlayer(), player2.getIdGame(), win2, false,
-            message2, board, 2);
-        memset(buffer, 0, DEFAULT_BUFLEN);
-        msg22.serialize(buffer);
-        send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
-
+        // Player2 diskonektovan, Player1 se vraća u listu čekanja
+        lock_guard<mutex> lock(waitingMutex);
+        waitingPlayers.add(waitingPlayers.size() + 1, player1);
+        closesocket(player2.getAcceptedSocket());
+        return;
     }
 
-    closesocket(player1.getAcceptedSocket());
-    closesocket(player2.getAcceptedSocket());
+    if (bothAlive)
+    {
+        cout << "=================================================" << endl;
+        cout << "[TG] Game " << player1.getIdGame() << " notifications sent to both players." << endl;
+        cout << "=================================================\n" << endl;
+
+        int iResult;
+
+        bool playing = true;
+        while (playing) {
+            // player 1 move
+            memset(buffer, 0, DEFAULT_BUFLEN);
+            if (!recvWithTimeout(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, TIMEOUT_SECONDS)) {
+                cout << "[TG] Game  " << player1.getIdGame() << " Player 1 timed out or disconnected.  Ending game." << endl;
+
+                MessageForMove timeoutMsg1(SERVER_ID, player1.getIdPlayer(), player1.getIdGame(),
+                    true, false, "Timeout!  You lost the game.", board, 1);
+                MessageForMove timeoutMsg2(SERVER_ID, player2.getIdPlayer(), player2.getIdGame(),
+                    true, true, "Opponent timed out!  You win!", board, 2);
+
+                memset(buffer, 0, DEFAULT_BUFLEN);
+                timeoutMsg1.serialize(buffer);
+                send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
+                memset(buffer, 0, DEFAULT_BUFLEN);
+                timeoutMsg2.serialize(buffer);
+                send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
+
+                closesocket(player1.getAcceptedSocket());
+                closesocket(player2.getAcceptedSocket());
+                return;
+            }
+
+            Move playedMove1;
+            playedMove1.deserialize(buffer);
+
+            board[playedMove1.getX()][playedMove1.getY()] = 1;
+            const char* message = "Player 1 played his move. ";
+            bool win1 = false;
+
+            for (int i = 0; i < 3; ++i) {
+                if ((board[i][0] == 1 && board[i][1] == 1 && board[i][2] == 1) ||
+                    (board[0][i] == 1 && board[1][i] == 1 && board[2][i] == 1)) win1 = true;
+            }
+            if ((board[0][0] == 1 && board[1][1] == 1 && board[2][2] == 1) ||
+                (board[0][2] == 1 && board[1][1] == 1 && board[2][0] == 1)) win1 = true;
+
+            if (win1)
+            {
+                cout << "=================================================\n" << endl;
+                cout << "[TG] Game " << player1.getIdGame() << "  =>  " << "PLAYER 1 WINS! !!  Game ending!" << endl;
+                cout << "=================================================\n" << endl;
+
+                MessageForMove finalMsg1(SERVER_ID, player1.getIdPlayer(), player1.getIdGame(), win1, true,
+                    "YOU WIN! !! Game ending!", board, 1);
+                memset(buffer, 0, DEFAULT_BUFLEN);
+                finalMsg1.serialize(buffer);
+                send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
+
+                MessageForMove finalMsg2(SERVER_ID, player2.getIdPlayer(), player2.getIdGame(), win1, true,
+                    "You lost.  Player 1 wins.  Game ending!", board, 2);
+                memset(buffer, 0, DEFAULT_BUFLEN);
+                finalMsg2.serialize(buffer);
+                send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
+
+                closesocket(player1.getAcceptedSocket());
+                closesocket(player2.getAcceptedSocket());
+                return;
+            }
+
+            MessageForMove msg1(SERVER_ID, player1.getIdPlayer(), player1.getIdGame(), win1, false,
+                message, board, 1);
+            memset(buffer, 0, DEFAULT_BUFLEN);
+            msg1.serialize(buffer);
+            send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
+
+            MessageForMove msg2(SERVER_ID, player2.getIdPlayer(), player2.getIdGame(), win1, true,
+                message, board, 2);
+            memset(buffer, 0, DEFAULT_BUFLEN);
+            msg2.serialize(buffer);
+            send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
+
+            // player 2 move
+            memset(buffer, 0, DEFAULT_BUFLEN);
+            if (!recvWithTimeout(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, TIMEOUT_SECONDS)) {
+                cout << "[TG] Game  " << player2.getIdGame() << " Player 2 timed out or disconnected. Ending game." << endl;
+
+                MessageForMove timeoutMsg2(SERVER_ID, player2.getIdPlayer(), player2.getIdGame(),
+                    true, false, "Timeout! You lost the game.", board, 2);
+                MessageForMove timeoutMsg1(SERVER_ID, player1.getIdPlayer(), player1.getIdGame(),
+                    true, true, "Opponent timed out! You win!", board, 1);
+
+                memset(buffer, 0, DEFAULT_BUFLEN);
+                timeoutMsg2.serialize(buffer); send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
+                memset(buffer, 0, DEFAULT_BUFLEN);
+                timeoutMsg1.serialize(buffer); send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
+
+                closesocket(player1.getAcceptedSocket());
+                closesocket(player2.getAcceptedSocket());
+                return;
+            }
+
+            Move playedMove2;
+            playedMove2.deserialize(buffer);
+
+            board[playedMove2.getX()][playedMove2.getY()] = 2;
+            const char* message2 = "Player 2 played his move.";
+            bool win2 = false;
+
+            for (int i = 0; i < 3; ++i) {
+                if ((board[i][0] == 2 && board[i][1] == 2 && board[i][2] == 2) ||
+                    (board[0][i] == 2 && board[1][i] == 2 && board[2][i] == 2)) win2 = true;
+            }
+            if ((board[0][0] == 2 && board[1][1] == 2 && board[2][2] == 2) ||
+                (board[0][2] == 2 && board[1][1] == 2 && board[2][0] == 2)) win2 = true;
+
+            if (win2)
+            {
+                cout << "=================================================\n" << endl;
+                cout << "[TG] Game " << player1.getIdGame() << "  =>  " << "PLAYER 2 WINS!!! Game ending!" << endl;
+                cout << "=================================================\n" << endl;
+
+                MessageForMove finalMsg1(SERVER_ID, player1.getIdPlayer(), player1.getIdGame(), win2, true,
+                    "You lost. Player 2 wins.  Game ending!", board, 1);
+                memset(buffer, 0, DEFAULT_BUFLEN);
+                finalMsg1.serialize(buffer);
+                send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
+
+                MessageForMove finalMsg2(SERVER_ID, player2.getIdPlayer(), player2.getIdGame(), win2, true,
+                    "YOU WIN!!! Game ending!", board, 2);
+                memset(buffer, 0, DEFAULT_BUFLEN);
+                finalMsg2.serialize(buffer);
+                send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
+
+                closesocket(player1.getAcceptedSocket());
+                closesocket(player2.getAcceptedSocket());
+                return;
+            }
+
+            MessageForMove msg12(SERVER_ID, player1.getIdPlayer(), player1.getIdGame(), win2, true,
+                message2, board, 1);
+            memset(buffer, 0, DEFAULT_BUFLEN);
+            msg12.serialize(buffer);
+            send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
+
+            MessageForMove msg22(SERVER_ID, player2.getIdPlayer(), player2.getIdGame(), win2, false,
+                message2, board, 2);
+            memset(buffer, 0, DEFAULT_BUFLEN);
+            msg22.serialize(buffer);
+            send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
+
+        }
+
+        closesocket(player1.getAcceptedSocket());
+        closesocket(player2.getAcceptedSocket());
+    }
 }
