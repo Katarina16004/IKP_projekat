@@ -85,14 +85,14 @@ int main()
     // Initialize Winsock
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != 0) {
-        cerr << "WSAStartup failed: " << iResult << endl;
+        cerr << "WSAStartup failed:  " << iResult << endl;
         return 1;
     }
 
     // Create socket
     SOCKET listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (listenSocket == INVALID_SOCKET) {
-        cerr << "Socket creation failed:  " << WSAGetLastError() << endl;
+        cerr << "Socket creation failed:   " << WSAGetLastError() << endl;
         WSACleanup();
         return 1;
     }
@@ -105,7 +105,7 @@ int main()
 
     iResult = bind(listenSocket, (sockaddr*)&serverAddr, sizeof(serverAddr));
     if (iResult == SOCKET_ERROR) {
-        cerr << "Bind failed: " << WSAGetLastError() << endl;
+        cerr << "Bind failed:  " << WSAGetLastError() << endl;
         closesocket(listenSocket);
         WSACleanup();
         return 1;
@@ -169,11 +169,11 @@ void ClientConnectionHandler(SOCKET clientSocket) {
     ConnectionRequest request;
     request.deserialize(recvBuffer);
 
-    cout << "[TOZ] Connection request from:  " << request.getUsername() << endl;
+    cout << "[TOZ] Connection request from:   " << request.getUsername() << endl;
 
     // Validate checksum
     if (!request.validateChecksum()) {
-        cout << "[TOZ] [X] Invalid checksum! Rejecting connection." << endl;
+        cout << "[TOZ] [X] Invalid checksum!  Rejecting connection." << endl;
 
         ConnectionResponse response(SERVER_ID, request.getIdSource(), false,
             "Invalid checksum - connection rejected", 0);
@@ -183,11 +183,62 @@ void ClientConnectionHandler(SOCKET clientSocket) {
         send(clientSocket, sendBuffer, DEFAULT_BUFLEN, 0);
 
         closesocket(clientSocket);
-        cout << "[TOZ] Connection rejected. Thread ending.\n" << endl;
+        cout << "[TOZ] Connection rejected.  Thread ending.\n" << endl;
         return;
     }
 
     cout << "[TOZ] [OK] Checksum valid." << endl;
+
+    //username validation
+    bool usernameValid = false;
+    string username;
+
+    while (!usernameValid) {
+        username = request.getUsername();
+
+        bool usernameTaken = false;
+        {
+            lock_guard<mutex> lock(waitingMutex);
+
+            for (int i = 1; i <= waitingPlayers.size(); i++) {
+                Player existingPlayer;
+                waitingPlayers.read(i, existingPlayer);
+
+                if (strcmp(existingPlayer.getUsername(), username.c_str()) == 0) {
+                    usernameTaken = true;
+                    break;
+                }
+            }
+        }
+
+        if (usernameTaken) {
+            cout << "[TOZ] [X] Username '" << username << "' already exists!  Asking for new username." << endl;
+
+            ConnectionResponse response(SERVER_ID, request.getIdSource(), false,
+                "Username already taken - choose another name", 0);
+
+            memset(sendBuffer, 0, DEFAULT_BUFLEN);
+            response.serialize(sendBuffer);
+            send(clientSocket, sendBuffer, DEFAULT_BUFLEN, 0);
+
+            //Wait for new username request
+            memset(recvBuffer, 0, DEFAULT_BUFLEN);
+            iResult = recv(clientSocket, recvBuffer, DEFAULT_BUFLEN, 0);
+
+            if (iResult <= 0) {
+                cout << "[TOZ] Client disconnected." << endl;
+                closesocket(clientSocket);
+                return;
+            }
+
+            request.deserialize(recvBuffer);
+            cout << "[TOZ] New username attempt:  " << request.getUsername() << endl;
+        }
+        else {
+            usernameValid = true;
+            cout << "[TOZ] [OK] Username '" << username << "' is unique." << endl;
+        }
+    }
 
     // Accept connection and assign tentative game ID
     int gameId, playerId;
@@ -199,12 +250,12 @@ void ClientConnectionHandler(SOCKET clientSocket) {
     }
 
     cout << "[TOZ] [OK] CONNECTION ACCEPTED" << endl;
-    cout << "[TOZ]   Username: " << request.getUsername() << endl;
+    cout << "[TOZ]   Username: " << username << endl;
     cout << "[TOZ]   Tentative Game ID: " << gameId << endl;
-    cout << "[TOZ]   Tentative Player ID: " << playerId << endl;
+    cout << "[TOZ]   Tentative Player ID:  " << playerId << endl;
 
     ConnectionResponse response(SERVER_ID, request.getIdSource(), true,
-        "Connection accepted!  Waiting for opponent...", gameId);
+        "Connection accepted!   Waiting for opponent.. .", gameId);
 
     memset(sendBuffer, 0, DEFAULT_BUFLEN);
     response.serialize(sendBuffer);
@@ -215,23 +266,22 @@ void ClientConnectionHandler(SOCKET clientSocket) {
     if (waitingPlayers.size() % 2 == 0)
     {
         move = 1;
-    } 
+    }
     else
     {
         move = 2;
     }
 
-
-    Player player(request.getUsername(), clientSocket, gameId, playerId, move);
+    Player player(username.c_str(), clientSocket, gameId, playerId, move); 
 
     {
         lock_guard<mutex> lock(waitingMutex);
         waitingPlayers.add(waitingPlayers.size() + 1, player);
         cout << "[TOZ] Player '" << player.getUsername() << "' added to waiting list." << endl;
-        cout << "[TOZ] Waiting players: " << waitingPlayers.size() << endl;
+        cout << "[TOZ] Waiting players:  " << waitingPlayers.size() << endl;
     }
 
-    cout << "[TOZ] Client connection handler finished.  Player is waiting.\n" << endl;
+    cout << "[TOZ] Client connection handler finished.   Player is waiting.\n" << endl;
 }
 
 // TS
@@ -291,7 +341,7 @@ void PlayingThread(Player player1, Player player2) {
     int board[3][3] = { 0 };
 
     MessageForMove msg1(SERVER_ID, player1.getIdPlayer(), player1.getIdGame(), false, true,
-        "Game found!  You are Player X. You are playing first...", board, 1);
+        "Game found!   You are Player X.  You are playing first.. .", board, 1);
     memset(buffer, 0, DEFAULT_BUFLEN);
     msg1.serialize(buffer);
     send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
@@ -311,12 +361,12 @@ void PlayingThread(Player player1, Player player2) {
         // player 1 move
         memset(buffer, 0, DEFAULT_BUFLEN);
         if (!recvWithTimeout(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, TIMEOUT_SECONDS)) {
-            cout << "[TG] Player 1 timed out or disconnected. Ending game." << endl;
+            cout << "[TG] Player 1 timed out or disconnected.  Ending game." << endl;
 
             MessageForMove timeoutMsg1(SERVER_ID, player1.getIdPlayer(), player1.getIdGame(),
-                true, false, "Timeout! You lost the game.", board, 1);
+                true, false, "Timeout!  You lost the game.", board, 1);
             MessageForMove timeoutMsg2(SERVER_ID, player2.getIdPlayer(), player2.getIdGame(),
-                true, true, "Opponent timed out! You win!", board, 2);
+                true, true, "Opponent timed out!  You win!", board, 2);
 
             memset(buffer, 0, DEFAULT_BUFLEN);
             timeoutMsg1.serialize(buffer);
@@ -334,7 +384,7 @@ void PlayingThread(Player player1, Player player2) {
         playedMove1.deserialize(buffer);
 
         board[playedMove1.getX()][playedMove1.getY()] = 1;
-        const char* message = "Player 1 played his move.";
+        const char* message = "Player 1 played his move. ";
         bool win1 = false;
 
         for (int i = 0; i < 3; ++i) {
@@ -347,17 +397,17 @@ void PlayingThread(Player player1, Player player2) {
         if (win1)
         {
             cout << "=================================================\n" << endl;
-            cout << "[TG] Game " << player1.getIdGame() << "  =>  " << "PLAYER 1 WINS!!! Game ending!" << endl;
+            cout << "[TG] Game " << player1.getIdGame() << "  =>  " << "PLAYER 1 WINS! !!  Game ending!" << endl;
             cout << "=================================================\n" << endl;
 
             MessageForMove finalMsg1(SERVER_ID, player1.getIdPlayer(), player1.getIdGame(), win1, true,
-                "YOU WIN!!! Game ending!", board, 1);
+                "YOU WIN! !! Game ending!", board, 1);
             memset(buffer, 0, DEFAULT_BUFLEN);
             finalMsg1.serialize(buffer);
             send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
 
             MessageForMove finalMsg2(SERVER_ID, player2.getIdPlayer(), player2.getIdGame(), win1, true,
-                "You lost. Player 1 wins. Game ending!", board, 2);
+                "You lost.  Player 1 wins.  Game ending!", board, 2);
             memset(buffer, 0, DEFAULT_BUFLEN);
             finalMsg2.serialize(buffer);
             send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
@@ -382,7 +432,7 @@ void PlayingThread(Player player1, Player player2) {
         // player 2 move
         memset(buffer, 0, DEFAULT_BUFLEN);
         if (!recvWithTimeout(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, TIMEOUT_SECONDS)) {
-           cout << "[TG] Player 2 timed out or disconnected. Ending game." << endl;
+            cout << "[TG] Player 2 timed out or disconnected. Ending game." << endl;
 
             MessageForMove timeoutMsg2(SERVER_ID, player2.getIdPlayer(), player2.getIdGame(),
                 true, false, "Timeout! You lost the game.", board, 2);
@@ -420,7 +470,7 @@ void PlayingThread(Player player1, Player player2) {
             cout << "=================================================\n" << endl;
 
             MessageForMove finalMsg1(SERVER_ID, player1.getIdPlayer(), player1.getIdGame(), win2, true,
-                "You lost. Player 2 wins. Game ending!", board, 1);
+                "You lost. Player 2 wins.  Game ending!", board, 1);
             memset(buffer, 0, DEFAULT_BUFLEN);
             finalMsg1.serialize(buffer);
             send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
