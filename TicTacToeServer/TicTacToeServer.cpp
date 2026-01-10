@@ -285,7 +285,7 @@ void MatchmakingThread() {
 
 //TG
 void PlayingThread(Player player1, Player player2) {
-    const int TIMEOUT_SECONDS = 60; // timeout po potezu - za testiranje moze i manje da se stavi
+    const int TIMEOUT_SECONDS = 20; // timeout po potezu - za testiranje moze i manje da se stavi
 
     char buffer[DEFAULT_BUFLEN];
     int board[3][3] = { 0 };

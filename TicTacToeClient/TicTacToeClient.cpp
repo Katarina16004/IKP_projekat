@@ -7,6 +7,8 @@
 #include <WS2tcpip.h>
 #include <string>
 #include <limits>
+#include <thread>
+#include <atomic> //za thread safe variale
 
 #include "../CommonLib/ConnectionRequest.h"
 #include "../CommonLib/ConnectionResponse.h"
@@ -31,6 +33,46 @@
 
 using namespace std;
 
+atomic<bool> gameEnded(false);
+atomic<bool> waitingForInput(false);
+SOCKET globalSocket = INVALID_SOCKET; //sad je globalni socket da bi ga mogao koristiti i background thread
+
+// Background listener thread
+void backgroundListener() {
+    char recvBuffer[DEFAULT_BUFLEN];
+
+    while (!gameEnded) {
+        if (waitingForInput) {
+            memset(recvBuffer, 0, DEFAULT_BUFLEN);
+            int iResult = recv(globalSocket, recvBuffer, DEFAULT_BUFLEN, 0);
+
+            if (iResult > 0) {
+                MessageForMove msg;
+                msg.deserialize(recvBuffer);
+
+                if (msg.validateChecksum() && msg.getEnd()) {
+                    cout << "\n\n========================================" << endl;
+                    cout << "[GAME ENDED]" << endl;
+                    cout << "Message: " << msg.getMessage() << endl;
+                    cout << "========================================" << endl;
+                    cout << "\nYour input is no longer needed." << endl;
+                    cout << "Press Enter to exit... ";
+                    gameEnded = true;
+                    waitingForInput = false;
+                    return;
+                }
+            }
+            else if (iResult <= 0) {
+                gameEnded = true;
+                return;
+            }
+        }
+        else {
+            this_thread::sleep_for(chrono::milliseconds(100));
+        }
+    }
+}
+
 int main()
 {
     WSADATA wsaData;
@@ -43,17 +85,19 @@ int main()
     // Initialize Winsock
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != 0) {
-        cerr << "WSAStartup failed: " << iResult << endl;
+        cerr << "WSAStartup failed:  " << iResult << endl;
         return 1;
     }
 
     // Create socket
     SOCKET connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (connectSocket == INVALID_SOCKET) {
-        cerr << "Socket creation failed: " << WSAGetLastError() << endl;
+        cerr << "Socket creation failed:  " << WSAGetLastError() << endl;
         WSACleanup();
         return 1;
     }
+
+    globalSocket = connectSocket;
 
     // Connect to server
     sockaddr_in serverAddr;
@@ -77,7 +121,7 @@ int main()
     cout << "Enter your username: ";
     cin.getline(username, 50);
 
-    // TK: Create and send connection request
+    // TK:  Create and send connection request
     cout << "\n[TK] Sending connection request..." << endl;
     ConnectionRequest request(1, SERVER_ID, username);
 
@@ -129,7 +173,7 @@ int main()
             // Connection rejected, close and exit
             closesocket(connectSocket);
             WSACleanup();
-            cout << "\nPress Enter to exit... ";
+            cout << "\nPress Enter to exit...  ";
             cin.get();
             return 1;
         }
@@ -142,6 +186,11 @@ int main()
         WSACleanup();
         return 1;
     }
+
+    // Start background listener thread
+    thread listenerThread(backgroundListener);
+    listenerThread.detach(); //radi samostalno
+
     bool running = true;
 
     // SECOND RESPONSE
@@ -149,6 +198,8 @@ int main()
     cout << "[TK] Waiting for TS to find opponent.. .\n" << endl;
 
     do {
+        if (gameEnded) break;
+
         memset(recvBuffer, 0, DEFAULT_BUFLEN);
         iResult = recv(connectSocket, recvBuffer, DEFAULT_BUFLEN, 0);
 
@@ -165,14 +216,14 @@ int main()
                 return 1;
             }
 
-            string mess = "Game found!";
+            string mess = "Game found! ";
             if (mess.compare(0, 11, matchMessage.getMessage(), 0, 11) == 0)
             {
                 cout << "\n========================================" << endl;
                 cout << "[TK] MATCHMAKING COMPLETE!" << endl;
                 cout << "Message: " << matchMessage.getMessage() << endl;
                 cout << "Final Game ID: " << matchMessage.getIdGame() << endl;
-                cout << "Final Player ID: " << matchMessage.getIdDest() << endl;
+                cout << "Final Player ID:  " << matchMessage.getIdDest() << endl;
                 cout << "========================================\n" << endl;
 
                 cout << "[TK] Game is about to start!" << endl;
@@ -182,7 +233,7 @@ int main()
             {
                 if (matchMessage.getPlaying())
                 {
-                    cout << "Your move! Pick a free spot on board: " << endl;
+                    cout << "Your move!  Pick a free spot on board:  " << endl;
 
                     const int (*b)[3] = matchMessage.getBoard();
                     for (int i = 0; i < 3; i++)
@@ -219,21 +270,56 @@ int main()
 
                     bool badMove = true;
                     int x, y;
+
                     do {
+                        if (gameEnded) break;
+
                         cout << "Row(1-3): ";
+
+                        // Activate background listener
+                        waitingForInput = true;
+
                         while (!(cin >> x) || x < 1 || x > 3) {
+                            if (gameEnded) {
+                                waitingForInput = false;
+                                break;
+                            }
                             cin.clear();
                             cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                            if (gameEnded) {
+                                waitingForInput = false;
+                                break;
+                            }
                             cout << "Invalid input. Row (1-3): ";
                         }
+
+                        waitingForInput = false;
+
+                        if (gameEnded) break;
                         x--;
 
                         cout << "Column(1-3): ";
+
+                        // Activate background listener again
+                        waitingForInput = true;
+
                         while (!(cin >> y) || y < 1 || y > 3) {
+                            if (gameEnded) {
+                                waitingForInput = false;
+                                break;
+                            }
                             cin.clear();
                             cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                            if (gameEnded) {
+                                waitingForInput = false;
+                                break;
+                            }
                             cout << "Invalid input. Column (1-3): ";
                         }
+
+                        waitingForInput = false;
+
+                        if (gameEnded) break;
                         y--;
 
                         if (b[x][y] != 0)
@@ -244,7 +330,12 @@ int main()
                         {
                             badMove = false;
                         }
-                    } while (badMove);
+                    } while (badMove && !gameEnded);
+
+                    if (gameEnded) {
+                        break;
+                    }
+
                     cout << "\n[TK] Sending played move ..." << endl;
                     Move playedMove(matchMessage.getIdDest(), matchMessage.getIdSource(), matchMessage.getIdGame(), x, y);
 
@@ -267,7 +358,7 @@ int main()
                 {
                     // drugi igrac je na potezu
                     //cout << matchMessage.getMessage() << endl;
-                    cout << "Opponents move! Waiting for his move..." << endl;
+                    cout << "Opponents move!  Waiting for his move..." << endl;
                     cout << "========================================\n" << endl;
 
                 }
@@ -282,20 +373,24 @@ int main()
 
         }
         else if (iResult == 0) {
-            cout << "[TK] Server closed the connection." << endl;
+            cout << "\n[TK] Server closed the connection." << endl;
             running = false;
         }
         else {
-            cerr << "[TK] Failed to receive response." << endl;
+            if (!gameEnded) {
+                cerr << "[TK] Failed to receive response." << endl;
+            }
             running = false;
         }
-    } while (running);
+    } while (running && !gameEnded);
 
     cout << "\nPress Enter to exit... ";
     cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
     cin.get();
 
     // Cleanup
+    gameEnded = true;
+    this_thread::sleep_for(chrono::milliseconds(200)); // Wait for thread
     closesocket(connectSocket);
     WSACleanup();
     return 0;
