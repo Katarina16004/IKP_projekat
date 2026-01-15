@@ -42,13 +42,13 @@ mutex idMutex;
 bool serverRunning = true;
 
 void ClientConnectionHandler(SOCKET clientSocket);  // TOZ thread
-void MatchmakingThread();  // TS thread
+void MatchmakingThread();  // TS/Matchmaking thread
 void PlayingThread(Player player1, Player player2); // TG thread
 
 bool recvWithTimeout(SOCKET sock, char* buffer, int bufLen, int timeoutSeconds) {
-    fd_set readfds;
+    fd_set readfds; //skup socketa
     FD_ZERO(&readfds);
-    FD_SET(sock, &readfds);
+    FD_SET(sock, &readfds); //dodajemo nas socket
 
     // timeout
     timeval tv;
@@ -58,7 +58,7 @@ bool recvWithTimeout(SOCKET sock, char* buffer, int bufLen, int timeoutSeconds) 
     int result = select(0, &readfds, NULL, NULL, &tv);
 
     if (result > 0) {
-        // podaci spremni za recv
+		// znaci da je bar jedan socket spreman za citanje
         int iResult = recv(sock, buffer, bufLen, 0);
         return iResult > 0;  // true ako je primljeno
     }
@@ -82,14 +82,14 @@ int main()
     cout << "    TIC TAC TOE SERVER   " << endl;
     cout << "========================================\n" << endl;
 
-    // Initialize Winsock
+	// pokretanje socket biblioteke
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != 0) {
         cerr << "WSAStartup failed:  " << iResult << endl;
         return 1;
     }
 
-    // Create socket
+    // kreiranje socketa
     SOCKET listenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (listenSocket == INVALID_SOCKET) {
         cerr << "Socket creation failed:   " << WSAGetLastError() << endl;
@@ -97,7 +97,7 @@ int main()
         return 1;
     }
 
-    // Bind socket
+    // Bindovanje socketa
     sockaddr_in serverAddr;
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_addr.s_addr = INADDR_ANY;
@@ -111,7 +111,7 @@ int main()
         return 1;
     }
 
-    // Listen
+    // Listen rezim socketa
     iResult = listen(listenSocket, SOMAXCONN);
     if (iResult == SOCKET_ERROR) {
         cerr << "Listen failed: " << WSAGetLastError() << endl;
@@ -123,12 +123,12 @@ int main()
     cout << "[SERVER] Listening on port " << DEFAULT_PORT << endl;
     cout << "[SERVER] Ready to accept multiple clients..." << endl;
 
-    // Start TS thread
+    // pokrecemo TS thread
     thread matchmakingThread(MatchmakingThread);
-    matchmakingThread.detach();
+    matchmakingThread.detach(); //radi odvojeno od maina
     cout << "[TS] Matchmaking thread started.\n" << endl;
 
-    // Accept connections (TOZ threads will be created here)
+	// prihvatanje klijenata
     while (serverRunning) {
         SOCKET clientSocket = accept(listenSocket, NULL, NULL);
         if (clientSocket == INVALID_SOCKET) {
@@ -138,7 +138,7 @@ int main()
 
         cout << "[SERVER] New client connection received!" << endl;
 
-        // TOZ create thread for each client connection
+        // pokrecemo TOZ thread
         thread clientThread(ClientConnectionHandler, clientSocket);
         clientThread.detach();
     }
@@ -156,7 +156,7 @@ void ClientConnectionHandler(SOCKET clientSocket) {
 
     cout << "[TOZ] New client handler thread started." << endl;
 
-    // Receive connection request
+	// prihvatanje zahteva za konekciju
     memset(recvBuffer, 0, DEFAULT_BUFLEN);
     iResult = recv(clientSocket, recvBuffer, DEFAULT_BUFLEN, 0);
 
@@ -171,7 +171,7 @@ void ClientConnectionHandler(SOCKET clientSocket) {
 
     cout << "[TOZ] Connection request from:   " << request.getUsername() << endl;
 
-    // Validate checksum
+	// validacija checksum-a
     if (!request.validateChecksum()) {
         cout << "[TOZ] [X] Invalid checksum!  Rejecting connection." << endl;
 
@@ -189,7 +189,7 @@ void ClientConnectionHandler(SOCKET clientSocket) {
 
     cout << "[TOZ] [OK] Checksum valid." << endl;
 
-    //username validation
+	// provera jedinstvenosti username-a
     bool usernameValid = false;
     string username;
 
@@ -221,7 +221,7 @@ void ClientConnectionHandler(SOCKET clientSocket) {
             response.serialize(sendBuffer);
             send(clientSocket, sendBuffer, DEFAULT_BUFLEN, 0);
 
-            //Wait for new username request
+			// cekanje zahteva za novim username-om
             memset(recvBuffer, 0, DEFAULT_BUFLEN);
             iResult = recv(clientSocket, recvBuffer, DEFAULT_BUFLEN, 0);
 
@@ -240,7 +240,7 @@ void ClientConnectionHandler(SOCKET clientSocket) {
         }
     }
 
-    // Accept connection and assign tentative game ID
+	// prihvata konekciju i postavlja potencijlni gameId i playerId
     int gameId, playerId;
     {
         lock_guard<mutex> lock(idMutex);
@@ -261,7 +261,7 @@ void ClientConnectionHandler(SOCKET clientSocket) {
     response.serialize(sendBuffer);
     send(clientSocket, sendBuffer, DEFAULT_BUFLEN, 0);
 
-    // Create Player object and add to waiting list
+	// ako je paran broj igraca u listi cekanja
     int move = 0;
     if (waitingPlayers.size() % 2 == 0)
     {
@@ -272,7 +272,7 @@ void ClientConnectionHandler(SOCKET clientSocket) {
         move = 2;
     }
 
-    Player player(username.c_str(), clientSocket, gameId, playerId, move); 
+    Player player(username.c_str(), clientSocket, gameId, playerId, move); //dodajemo prijavljenog igraca u listu cekanja za game
 
     {
         lock_guard<mutex> lock(waitingMutex);
@@ -289,32 +289,30 @@ void MatchmakingThread() {
     cout << "[TS] Matchmaking service started." << endl;
 
     while (serverRunning) {
-        // Check every second for players to match
+
         this_thread::sleep_for(chrono::milliseconds(1000));
 
         lock_guard<mutex> lock(waitingMutex);
 
-        // Check if we have at least 2 players waiting
+		// proveravamo da li ima bar dva igraca u listi cekanja
         if (waitingPlayers.size() < 2) {
             continue;
         }
-
-        // Get first two players
+		//uzimamo prva dva igraca iz liste cekanja
         Player player1, player2;
         waitingPlayers.read(1, player1);
         waitingPlayers.read(2, player2);
 
-        // Remove them from waiting list
         waitingPlayers.remove(1);
         waitingPlayers.remove(1);
 
+		//dodela konacnog gameId
         int gameId;
         {
             lock_guard<mutex> lock(idMutex);
             gameId = nextGameId++;
         }
 
-        // Update both players with the correct game ID
         player1.setIdGame(gameId);
         player2.setIdGame(gameId);
 
@@ -326,6 +324,7 @@ void MatchmakingThread() {
             << " (Game ID: " << player2.getIdGame() << ")" << endl;
         cout << "[TS-MATCHMAKING] ================================\n" << endl;
 
+		// pokrecemo TG thread za odigravanje partije
         thread gameThread(PlayingThread, player1, player2);
         gameThread.detach();
     }
@@ -346,6 +345,7 @@ void PlayingThread(Player player1, Player player2) {
         "Game found!   You are Player X.  You are playing first.. .", board, 1);
     memset(buffer, 0, DEFAULT_BUFLEN);
     msg1.serialize(buffer);
+	//ako se igrac u medjuvremenu diskonektovao 
     if (send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0) == SOCKET_ERROR)
     {
         cout << "=================================================" << endl;
@@ -354,8 +354,7 @@ void PlayingThread(Player player1, Player player2) {
 
         bothAlive = false;
         nextGameId--;
-
-        // Player1 diskonektovan, Player2 se vraća u listu čekanja
+        // Player2 se vraca u listu cekanja
         lock_guard<mutex> lock(waitingMutex);
         waitingPlayers.add(waitingPlayers.size() + 1, player2);
         closesocket(player1.getAcceptedSocket());
@@ -376,13 +375,13 @@ void PlayingThread(Player player1, Player player2) {
         bothAlive = false;
         nextGameId--;
 
-        // Player2 diskonektovan, Player1 se vraća u listu čekanja
+        // Player2 diskonektovan, Player1 se vraca u listu cekanja
         lock_guard<mutex> lock(waitingMutex);
         waitingPlayers.add(waitingPlayers.size() + 1, player1);
         closesocket(player2.getAcceptedSocket());
         return;
     }
-
+    //pocinje igra
     if (bothAlive)
     {
         cout << "=================================================" << endl;
@@ -393,8 +392,9 @@ void PlayingThread(Player player1, Player player2) {
 
         bool playing = true;
         while (playing) {
-            // player 1 move
+            // player 1 potez
             memset(buffer, 0, DEFAULT_BUFLEN);
+            //isticanje tajmera za potez
             if (!recvWithTimeout(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, TIMEOUT_SECONDS)) {
                 cout << "[TG] Game  " << player1.getIdGame() << " Player 1 timed out or disconnected.  Ending game." << endl;
 
@@ -464,7 +464,7 @@ void PlayingThread(Player player1, Player player2) {
             msg2.serialize(buffer);
             send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
 
-            // player 2 move
+            // player 2 potez
             memset(buffer, 0, DEFAULT_BUFLEN);
             if (!recvWithTimeout(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, TIMEOUT_SECONDS)) {
                 cout << "[TG] Game  " << player2.getIdGame() << " Player 2 timed out or disconnected. Ending game." << endl;

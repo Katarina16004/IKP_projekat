@@ -35,9 +35,9 @@ using namespace std;
 
 atomic<bool> gameEnded(false);
 atomic<bool> waitingForInput(false);
-SOCKET globalSocket = INVALID_SOCKET; //sad je globalni socket da bi ga mogao koristiti i background thread
+SOCKET globalSocket = INVALID_SOCKET; // globalni socket da bi ga mogao koristiti i background thread
 
-// Background listener thread
+// Background listener thread (ako istekne vreme i server posalje poruku o kraju igre, odmah prekidamo klijentov unos)
 void backgroundListener() {
     char recvBuffer[DEFAULT_BUFLEN];
 
@@ -85,14 +85,14 @@ int main()
     cout << "    TIC TAC TOE CLIENT    " << endl;
     cout << "========================================\n" << endl;
 
-    // Initialize Winsock
+	// pokretanje socket biblioteke
     iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
     if (iResult != 0) {
         cerr << "WSAStartup failed:   " << iResult << endl;
         return 1;
     }
 
-    // Create socket
+    // kreiranje socketa
     SOCKET connectSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (connectSocket == INVALID_SOCKET) {
         cerr << "Socket creation failed:  " << WSAGetLastError() << endl;
@@ -102,7 +102,7 @@ int main()
 
     globalSocket = connectSocket;
 
-    // Connect to server
+    // povezivanje na server
     sockaddr_in serverAddr;
     serverAddr.sin_family = AF_INET;
     serverAddr.sin_addr.s_addr = inet_addr(SERVER_IP);
@@ -120,14 +120,14 @@ int main()
     //cout << "Connected to server!\n" << endl;
 
     bool usernameAccepted = false;
-    //username input validation 
+	// slanje usernamea i cekanje na odgovor
     while (!usernameAccepted) {
 
         char username[50];
         cout << "Enter your username: ";
         cin.getline(username, 50);
 
-        // TK: Create and send connection request
+		// TK: kreiranje zahteva za konekciju
         cout << "\n[TK] Sending connection request..." << endl;
         ConnectionRequest request(1, SERVER_ID, username);
 
@@ -135,6 +135,7 @@ int main()
         memset(sendBuffer, 0, DEFAULT_BUFLEN);
         request.serialize(sendBuffer);
 
+        //slanje zahteva
         iResult = send(connectSocket, sendBuffer, DEFAULT_BUFLEN, 0);
         if (iResult == SOCKET_ERROR) {
             cerr << "[TK] Send failed: " << WSAGetLastError() << endl;
@@ -148,7 +149,7 @@ int main()
         }
         cout << "[TK] Connection request sent successfully." << endl;
 
-        // FIRST RESPONSE
+        // cekamo odgovor
         cout << "\n[TK] Waiting for TOZ response..." << endl;
         char recvBuffer[DEFAULT_BUFLEN];
         memset(recvBuffer, 0, DEFAULT_BUFLEN);
@@ -158,7 +159,7 @@ int main()
             ConnectionResponse response;
             response.deserialize(recvBuffer);
 
-            // Validate checksum
+			// validacija checksum-a
             if (!response.validateChecksum()) {
                 cerr << "[TK] ERROR: Invalid checksum in response!" << endl;
                 closesocket(connectSocket);
@@ -169,7 +170,7 @@ int main()
                 return 1;
             }
 
-            // Check if accepted or rejected
+			// prihvacen ili odbijen username
             cout << "\n========================================" << endl;
             if (response.getAccepted()) {
                 cout << "[TK] [OK] CONNECTION ACCEPTED by TOZ" << endl;
@@ -214,13 +215,12 @@ int main()
         }
     }
 
-    // Start background listener thread
+    // pokretanje backround threada
     thread listenerThread(backgroundListener);
     listenerThread.detach(); //radi samostalno
 
     bool running = true;
 
-    // SECOND RESPONSE
     cout << "[TK] Waiting in matchmaking queue..." << endl;
     cout << "[TK] Waiting for TS to find opponent..  .\n" << endl;
 
@@ -236,7 +236,7 @@ int main()
             MessageForMove matchMessage;
             matchMessage.deserialize(recvBuffer);
 
-            // Validate checksum
+			// validacija checksum-a
             if (!matchMessage.validateChecksum()) {
                 cerr << "[TK] ERROR: Invalid checksum in matchmaking response!" << endl;
                 closesocket(connectSocket);
@@ -307,7 +307,7 @@ int main()
 
                         cout << "Row(1-3): ";
 
-                        // Activate background listener
+                        // pokrecemo background listener
                         waitingForInput = true;
 
                         while (!(cin >> x) || x < 1 || x > 3) {
@@ -331,7 +331,7 @@ int main()
 
                         cout << "Column(1-3): ";
 
-                        // Activate background listener again
+                        // pokrecemo background listener opet
                         waitingForInput = true;
 
                         while (!(cin >> y) || y < 1 || y > 3) {
