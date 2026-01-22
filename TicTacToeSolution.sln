@@ -11,6 +11,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TicTacToeClient", "TicTacTo
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Tests", "Tests\Tests.vcxproj", "{FC72099A-5AB4-4BCA-9388-512F1B392A2D}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "StressTests", "StressTests\StressTests.vcxproj", "{A1B51970-3C99-44FC-87FA-E3774E124F5E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -51,6 +53,14 @@ Global
 		{FC72099A-5AB4-4BCA-9388-512F1B392A2D}.Release|x64.Build.0 = Release|x64
 		{FC72099A-5AB4-4BCA-9388-512F1B392A2D}.Release|x86.ActiveCfg = Release|Win32
 		{FC72099A-5AB4-4BCA-9388-512F1B392A2D}.Release|x86.Build.0 = Release|Win32
+		{A1B51970-3C99-44FC-87FA-E3774E124F5E}.Debug|x64.ActiveCfg = Debug|x64
+		{A1B51970-3C99-44FC-87FA-E3774E124F5E}.Debug|x64.Build.0 = Debug|x64
+		{A1B51970-3C99-44FC-87FA-E3774E124F5E}.Debug|x86.ActiveCfg = Debug|Win32
+		{A1B51970-3C99-44FC-87FA-E3774E124F5E}.Debug|x86.Build.0 = Debug|Win32
+		{A1B51970-3C99-44FC-87FA-E3774E124F5E}.Release|x64.ActiveCfg = Release|x64
+		{A1B51970-3C99-44FC-87FA-E3774E124F5E}.Release|x64.Build.0 = Release|x64
+		{A1B51970-3C99-44FC-87FA-E3774E124F5E}.Release|x86.ActiveCfg = Release|Win32
+		{A1B51970-3C99-44FC-87FA-E3774E124F5E}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

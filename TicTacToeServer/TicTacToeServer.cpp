@@ -1,5 +1,6 @@
 ﻿#define _WINSOCK_DEPRECATED_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
+#define FD_SETSIZE 1024
 
 #include <iostream>
 #include <WinSock2.h>
@@ -123,6 +124,7 @@ int main()
     cout << "[SERVER] Listening on port " << DEFAULT_PORT << endl;
     cout << "[SERVER] Ready to accept multiple clients..." << endl;
 
+    // ZAKOMENTARISANO ZA PRVI TEST !!!!!!!!!!!!!!!!!!!!!!!!!!!!
     // pokrecemo TS thread
     thread matchmakingThread(MatchmakingThread);
     matchmakingThread.detach(); //radi odvojeno od maina
