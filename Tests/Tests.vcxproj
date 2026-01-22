@@ -107,6 +107,7 @@
     </ClCompile>
     <ClCompile Include="TestConnectionRequest.cpp" />
     <ClCompile Include="TestConnectionResponse.cpp" />
+    <ClCompile Include="TestMove.cpp" />
     <ClCompile Include="TestPlayer.cpp" />
   </ItemGroup>
   <ItemGroup>
