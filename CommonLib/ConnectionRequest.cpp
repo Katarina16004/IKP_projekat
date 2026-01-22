@@ -1,3 +1,4 @@
+#include "pch.h"
 #include "ConnectionRequest.h"
 
 ConnectionRequest::ConnectionRequest()
