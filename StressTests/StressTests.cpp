@@ -202,7 +202,7 @@ void runGameSimulation(int numBots) {
     vector<thread> threads;
     for (int i = 0; i < numBots; i++) {
         threads.push_back(thread(gameRoutine, i));
-        this_thread::sleep_for(chrono::milliseconds(20));
+        this_thread::sleep_for(chrono::milliseconds(100));
     }
     for (auto& t : threads) {
         if (t.joinable()) t.join();
@@ -237,7 +237,7 @@ int main() {
         cin >> choice;
 
         if (choice == 1) runLoginFlood(100);
-        else if (choice == 2) runGameSimulation(50);
+        else if (choice == 2) runGameSimulation(10);
     }
 
     WSACleanup();

@@ -8,22 +8,13 @@
 #include <thread>
 #include <mutex>
 #include <chrono>
+#include <conio.h>
 #include "../CommonLib/ConnectionRequest.h"
 #include "../CommonLib/ConnectionResponse.h"
 #include "../CommonLib/Player.h"
 #include "../CommonLib/List.h"
 #include "../CommonLib/MessageForMove.h"
 #include "../CommonLib/Move.h"
-
-// TEMPORARY
-#ifndef COMMONLIB_INCLUDED
-#define COMMONLIB_INCLUDED
-#include "../CommonLib/ConnectionRequest.cpp"
-#include "../CommonLib/ConnectionResponse.cpp"
-#include "../CommonLib/Player.cpp"
-#include "../CommonLib/MessageForMove.cpp"
-#include "../CommonLib/Move.cpp"
-#endif
 
 #pragma comment(lib, "ws2_32.lib")
 
@@ -45,6 +36,7 @@ bool serverRunning = true;
 void ClientConnectionHandler(SOCKET clientSocket);  // TOZ thread
 void MatchmakingThread();  // TS/Matchmaking thread
 void PlayingThread(Player player1, Player player2); // TG thread
+void CommandThread();
 
 bool recvWithTimeout(SOCKET sock, char* buffer, int bufLen, int timeoutSeconds) {
     fd_set readfds; //skup socketa
@@ -130,6 +122,10 @@ int main()
     matchmakingThread.detach(); //radi odvojeno od maina
     cout << "[TS] Matchmaking thread started.\n" << endl;
 
+    thread cmdThread(CommandThread);
+    cmdThread.detach();
+    cout << "[SERVER] Ready. Press 'C' to clear waiting list." << endl;
+
 	// prihvatanje klijenata
     while (serverRunning) {
         SOCKET clientSocket = accept(listenSocket, NULL, NULL);
@@ -148,6 +144,30 @@ int main()
     closesocket(listenSocket);
     WSACleanup();
     return 0;
+}
+
+void CommandThread() {
+    while (serverRunning) {
+        if (_kbhit()) {
+            int ch = _getch();
+            if (ch == 'c' || ch == 'C') {
+                lock_guard<mutex> lock(waitingMutex);
+
+                cout << "\n[COMMAND] Cleaning " << waitingPlayers.size() << " players..." << endl;
+
+                while (!waitingPlayers.empty()) {
+                    Player p;
+                    if (waitingPlayers.read(1, p)) {
+                        closesocket(p.getAcceptedSocket());
+                    }
+                    waitingPlayers.remove(1);
+                }
+
+                cout << "[COMMAND] Done. Waiting list is now empty." << endl;
+            }
+        }
+        this_thread::sleep_for(chrono::milliseconds(100));
+    }
 }
 
 // TOZ 
@@ -337,6 +357,7 @@ void MatchmakingThread() {
 //TG
 void PlayingThread(Player player1, Player player2) {
     const int TIMEOUT_SECONDS = 20; // timeout po potezu - za testiranje moze i manje da se stavi
+    int totalMoves = 0;
 
     bool bothAlive = true;
 
@@ -359,6 +380,7 @@ void PlayingThread(Player player1, Player player2) {
         // Player2 se vraca u listu cekanja
         lock_guard<mutex> lock(waitingMutex);
         waitingPlayers.add(waitingPlayers.size() + 1, player2);
+        shutdown(player1.getAcceptedSocket(), SD_BOTH);
         closesocket(player1.getAcceptedSocket());
         return;
     }
@@ -380,6 +402,7 @@ void PlayingThread(Player player1, Player player2) {
         // Player2 diskonektovan, Player1 se vraca u listu cekanja
         lock_guard<mutex> lock(waitingMutex);
         waitingPlayers.add(waitingPlayers.size() + 1, player1);
+        shutdown(player2.getAcceptedSocket(), SD_BOTH);
         closesocket(player2.getAcceptedSocket());
         return;
     }
@@ -412,7 +435,9 @@ void PlayingThread(Player player1, Player player2) {
                 timeoutMsg2.serialize(buffer);
                 send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
 
+                shutdown(player1.getAcceptedSocket(), SD_BOTH);
                 closesocket(player1.getAcceptedSocket());
+                shutdown(player2.getAcceptedSocket(), SD_BOTH);
                 closesocket(player2.getAcceptedSocket());
                 return;
             }
@@ -421,6 +446,8 @@ void PlayingThread(Player player1, Player player2) {
             playedMove1.deserialize(buffer);
 
             board[playedMove1.getX()][playedMove1.getY()] = 1;
+            totalMoves++;
+
             const char* message = "Player 1 played his move. ";
             bool win1 = false;
 
@@ -449,7 +476,34 @@ void PlayingThread(Player player1, Player player2) {
                 finalMsg2.serialize(buffer);
                 send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
 
+                shutdown(player1.getAcceptedSocket(), SD_BOTH);
                 closesocket(player1.getAcceptedSocket());
+                shutdown(player2.getAcceptedSocket(), SD_BOTH);
+                closesocket(player2.getAcceptedSocket());
+                return;
+            }
+
+            if (totalMoves == 9)
+            {
+                cout << "=================================================\n" << endl;
+                cout << "[TG] Game " << player1.getIdGame() << "  =>  " << "Draw!  Game ending!" << endl;
+                cout << "=================================================\n" << endl;
+
+                MessageForMove finalMsg1(SERVER_ID, player1.getIdPlayer(), player1.getIdGame(), true, false,
+                    "No one wins!! It's a draw! Game ending!", board, 1);
+                memset(buffer, 0, DEFAULT_BUFLEN);
+                finalMsg1.serialize(buffer);
+                send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
+
+                MessageForMove finalMsg2(SERVER_ID, player2.getIdPlayer(), player2.getIdGame(), true, false,
+                    "No one wins!! It's a draw! Game ending!", board, 2);
+                memset(buffer, 0, DEFAULT_BUFLEN);
+                finalMsg2.serialize(buffer);
+                send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
+
+                shutdown(player1.getAcceptedSocket(), SD_BOTH);
+                closesocket(player1.getAcceptedSocket());
+                shutdown(player2.getAcceptedSocket(), SD_BOTH);
                 closesocket(player2.getAcceptedSocket());
                 return;
             }
@@ -481,7 +535,9 @@ void PlayingThread(Player player1, Player player2) {
                 memset(buffer, 0, DEFAULT_BUFLEN);
                 timeoutMsg1.serialize(buffer); send(player1.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
 
+                shutdown(player1.getAcceptedSocket(), SD_BOTH);
                 closesocket(player1.getAcceptedSocket());
+                shutdown(player2.getAcceptedSocket(), SD_BOTH);
                 closesocket(player2.getAcceptedSocket());
                 return;
             }
@@ -490,6 +546,7 @@ void PlayingThread(Player player1, Player player2) {
             playedMove2.deserialize(buffer);
 
             board[playedMove2.getX()][playedMove2.getY()] = 2;
+            totalMoves++;
             const char* message2 = "Player 2 played his move.";
             bool win2 = false;
 
@@ -518,7 +575,9 @@ void PlayingThread(Player player1, Player player2) {
                 finalMsg2.serialize(buffer);
                 send(player2.getAcceptedSocket(), buffer, DEFAULT_BUFLEN, 0);
 
+                shutdown(player1.getAcceptedSocket(), SD_BOTH);
                 closesocket(player1.getAcceptedSocket());
+                shutdown(player2.getAcceptedSocket(), SD_BOTH);
                 closesocket(player2.getAcceptedSocket());
                 return;
             }
@@ -537,7 +596,9 @@ void PlayingThread(Player player1, Player player2) {
 
         }
 
+        shutdown(player1.getAcceptedSocket(), SD_BOTH);
         closesocket(player1.getAcceptedSocket());
+        shutdown(player2.getAcceptedSocket(), SD_BOTH);
         closesocket(player2.getAcceptedSocket());
     }
 }

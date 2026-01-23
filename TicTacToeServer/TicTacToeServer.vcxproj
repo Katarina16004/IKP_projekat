@@ -125,6 +125,11 @@
   <ItemGroup>
     <ClCompile Include="TicTacToeServer.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CommonLib\CommonLib.vcxproj">
+      <Project>{7ff59b9a-2d2e-4225-aff1-b72da95129e2}</Project>
+    </ProjectReference>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

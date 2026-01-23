@@ -15,15 +15,6 @@
 #include "../CommonLib/MessageForMove.h"
 #include "../CommonLib/Move.h"
 
-// TEMPORARY
-#ifndef COMMONLIB_INCLUDED
-#define COMMONLIB_INCLUDED
-#include "../CommonLib/ConnectionRequest.cpp"
-#include "../CommonLib/ConnectionResponse.cpp"
-#include "../CommonLib/MessageForMove.cpp"
-#include "../CommonLib/Move.cpp"
-#endif
-
 #pragma comment(lib, "ws2_32.lib")
 
 #define DEFAULT_PORT 27016
@@ -53,7 +44,7 @@ void backgroundListener() {
                 if (msg.validateChecksum() && msg.getEnd()) {
                     cout << "\n\n========================================" << endl;
                     cout << "[GAME ENDED]" << endl;
-                    cout << "Message: " << msg.getMessage() << endl;
+                    cout << msg.getMessage() << endl;
                     cout << "========================================" << endl;
                     cout << "\nYour input is no longer needed." << endl;
                     cout << "Press Enter to exit... ";
