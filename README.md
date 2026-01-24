@@ -20,6 +20,14 @@ Unit tests and a stress-testing tool are included to ensure correctness and stab
 - Unit tests for core data structures and message handling
 - Automated stress tests for scalability and robustness
 
+## Technologies Used
+
+- **C++**
+- **WinSock2 library**
+- **Windows OS**
+- **Google Test**
+- **Microsoft Visual Studio**
+
 ## Building
 
 1. **Environment:** Windows (Visual Studio 2019+/MSVC), WinSock2 required.
