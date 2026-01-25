@@ -237,7 +237,7 @@ int main() {
         cin >> choice;
 
         if (choice == 1) runLoginFlood(100);
-        else if (choice == 2) runGameSimulation(10);
+        else if (choice == 2) runGameSimulation(50);
     }
 
     WSACleanup();
